@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	trace "github.com/westarver/tracer"
-	glob "gopkg.in/godo.v2/glob"
 )
 
 func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
@@ -58,32 +57,19 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 	floatSliceType := reflect.TypeOf([]float64{})
 	stringSliceType := reflect.TypeOf([]string{})
 
-	//trace.Trace("arg passed ", a)       //<rmv/>
-	//trace.Trace("len args ", len(args)) //<rmv/>
-
 	cm, exist := cmds[a]
 	if !exist {
 		cm, exist = cmds["--"+a]
 		if !exist {
-			//trace.Trace("cmds[", a, "] does not exist") //<rmv/>
 			return 1, nil
 		}
 	}
-
-	// t := cm.Type
-	// //trace.Trace("type ", t) //<rmv/>
 
 	if len(args) < 1 {
 		//trace.Trace("returning nil len < 1") //<rmv/>
 		return 1, nil
 	}
 
-	// if len(args) > 1 {
-	// 	if args[1] == "--" {
-	// 		//trace.Trace("returning nil found --") //<rmv/>
-	// 		return 2, nil
-	// 	}
-	// }
 	switch cm.Type {
 	case boolType:
 		//trace.Trace("matched bool ", a) //<rmv/>
@@ -219,27 +205,14 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 		//trace.Trace("matched []string ", stringSliceType) //<rmv/>
 		var j int
 		var val []string
-		var vals []string
 		for i, a := range args[1:] {
-			trace.Trace("matched string ", a) //<rmv/>
-			var glob bool
-			if cm.canHaveGlob {
-				vals, glob = unGlob(a)
-				if glob {
-					val = append(val, vals...)
-					j = i + 1
-				}
-			}
 			if a == "--" {
 				j = i + 1
 				break
 			}
-			if !glob {
-				val = append(val, a)
-				j = i + 1
-			}
+			val = append(val, a)
+			j = i + 1
 		}
-		trace.Trace("matched []string ", val) //<rmv/>
 		cm1 := CmdLineItem[[]string]{
 			value:       val,
 			name:        cm.name,
@@ -255,24 +228,9 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 		}
 		//trace.Trace("\ncmd line item ", cm1) //<rmv/>
 		return j + 1, cm1
+
 	default:
 	}
 	//trace.Trace("returning nil no match") //<rmv/>
 	return 1, nil
-}
-
-//─────────────┤ unGlob ├─────────────
-
-func unGlob(glb string) ([]string, bool) {
-	var ret []string
-	var pats []string
-	pats = append(pats, glb)
-	fa, _, err := glob.Glob(pats)
-	if err != nil {
-		return ret, false
-	}
-	for _, f := range fa {
-		ret = append(ret, f.Path)
-	}
-	return ret, true
 }

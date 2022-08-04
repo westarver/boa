@@ -64,7 +64,6 @@ type cmdLineArg struct {
 	isFlag      bool
 	exclusive   bool
 	required    bool
-	canHaveGlob bool
 	requiredOr  []string
 	requiredAnd []string
 }

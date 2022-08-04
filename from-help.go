@@ -386,28 +386,24 @@ func scanFlag(h *helpParser) scanfunc {
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
 		meta := "*+#."
-		if len(line) > pos+4 {
-			if !strings.ContainsAny(line[pos:pos+4], meta) {
+		if len(line) > pos+3 {
+			if !strings.ContainsAny(line[pos:pos+3], meta) {
 				item.exclusive = false
 				item.isDefault = false
 			} else {
-				if strings.Contains(line[pos:pos+4], "*") {
+				if strings.Contains(line[pos:pos+3], "*") {
 					item.exclusive = true
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+4], "+") {
+				if strings.Contains(line[pos:pos+3], "+") {
 					item.isDefault = true
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+4], "!") {
-					item.canHaveGlob = true
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+4], "#") {
+				if strings.Contains(line[pos:pos+3], "#") {
 					item.Type = intType
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+4], ".") {
+				if strings.Contains(line[pos:pos+3], ".") {
 					item.Type = floatType
 					pos += 1
 				}

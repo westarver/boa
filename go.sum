@@ -1,12 +1,6 @@
-github.com/MichaelTJones/walk v0.0.0-20161122175330-4748e29d5718 h1:FSsoaa1q4jAaeiAUxf9H0PgFP7eA/UL6c3PdJH+nMN4=
-github.com/MichaelTJones/walk v0.0.0-20161122175330-4748e29d5718/go.mod h1:VVwKsx9Dc8rNG55BWqogoJzGubjKnRoXdUvpGbWqeCc=
-github.com/mgutz/str v1.2.0 h1:4IzWSdIz9qPQWLfKZ0rJcV0jcUDpxvP4JVZ4GXQyvSw=
-github.com/mgutz/str v1.2.0/go.mod h1:w1v0ofgLaJdoD0HpQ3fycxKD1WtxpjSo151pK/31q6w=
 github.com/rhysd/abspath v0.0.0-20200817132137-9532ba017882 h1:dy3Z0t7VxcGJjmLnOdUGsZqvfe8EQaUe7TsXHXOpFT8=
 github.com/rhysd/abspath v0.0.0-20200817132137-9532ba017882/go.mod h1:6lJvAsQlC7HHuw+YVkjhw+X12knsftTV2IO8AyTvC7I=
 github.com/westarver/helper v0.0.0-20220801160916-316c8c0df1a6 h1:SnFKDjuL0IsFKW4NA8HDoLE3WqzDxIjJw8poxJrDQ8c=
 github.com/westarver/helper v0.0.0-20220801160916-316c8c0df1a6/go.mod h1:oLPw43+DIOK1Alort4GbSTLkYOwZ9tWi5QYtLM20vIc=
 github.com/westarver/tracer v0.0.0-20220701000543-23a9c7e36ece h1:+6LH4oICJJsyiY71+0a++iv1dsjbhcpB6Qe6qdkuDoQ=
 github.com/westarver/tracer v0.0.0-20220701000543-23a9c7e36ece/go.mod h1:WMwNRet12riJL6soCMSUZi5hNPcde64BkTFuzbZmNmg=
-gopkg.in/godo.v2 v2.0.9 h1:jnbznTzXVk0JDKOxN3/LJLDPYJzIl0734y+Z0cEJb4A=
-gopkg.in/godo.v2 v2.0.9/go.mod h1:wgvPPKLsWN0hPIJ4JyxvFGGbIW3fJMSrXhdvSuZ1z/8=
