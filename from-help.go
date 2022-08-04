@@ -7,19 +7,17 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bitfield/script"
+	"github.com/westarver/helper"
 )
 
 const (
 	eol               = -1
 	eof               = -1
-	newline           = 10
-	tab               = 9
-	Usagepat          = `[Uu]{1}sage: `
-	CommandSectionPat = `Commands[\t ]*:`
-	FlagSectionPat    = `Flags[\t ]*:`
-	MoreSectionPat    = `More[\t ]*:`
-	StringDef         = "var DesignData = `"
+	Usagepat          = `^[Uu]{1}sage: `
+	CommandSectionPat = `^Commands[\t ]*:`
+	FlagSectionPat    = `^Flags[\t ]*:`
+	MoreSectionPat    = `^More[\t ]*:`
+	LongSectionPat    = `^Long Description[\t ]*:`
 )
 
 type scanfunc func(*helpParser) scanfunc
@@ -29,14 +27,17 @@ type helpParser struct {
 	commandsectionpat *regexp.Regexp
 	flagsectionpat    *regexp.Regexp
 	moresectionpat    *regexp.Regexp
+	longsectionpat    *regexp.Regexp
 	itemMap           map[string]cmdLineArg
 	text              string
 	lines             []string
 	errs              []parseError
 	pos               int
-	i                 int
-	width             int
 	line              int
+	cmd               int
+	flg               int
+	lng               int
+	more              int
 }
 
 func (h *helpParser) appendArg(a cmdLineArg) {
@@ -89,23 +90,26 @@ func (h *helpParser) Errors() string {
 	return strings.Join(errs, "\n")
 }
 
-func doFromHelp(helpdoc string) *CLI {
-	hlp, _ := script.Echo(helpdoc).Slice()
+func FromHelp(helpstring string) *CLI {
 	parser := helpParser{
 		usagepat:          regexp.MustCompile(Usagepat),
 		commandsectionpat: regexp.MustCompile(CommandSectionPat),
 		flagsectionpat:    regexp.MustCompile(FlagSectionPat),
 		moresectionpat:    regexp.MustCompile(MoreSectionPat),
+		longsectionpat:    regexp.MustCompile(LongSectionPat),
 		itemMap:           map[string]cmdLineArg{},
 		text:              "",
-		lines:             hlp,
+		lines:             helper.GetLinesFromString(helpstring),
 		errs:              []parseError{},
 		pos:               0,
-		i:                 0,
-		width:             0,
 		line:              0,
+		cmd:               0,
+		flg:               0,
+		lng:               0,
+		more:              0,
 	}
 
+	parser.cmd, parser.flg, parser.lng, parser.more = getLimits(&parser)
 	parser.text = parser.lines[0]
 	scanf := scanUsage(&parser)
 	for {
@@ -116,66 +120,139 @@ func doFromHelp(helpdoc string) *CLI {
 	}
 
 	fmt.Fprintln(os.Stderr, parser.Errors())
-	return parseCommandLineArgs(parser.itemMap, os.Args[1:])
 
+	cli := ParseCommandLineArgs(parser.itemMap, os.Args[1:])
+	cli.AllHelp = make(map[string]string)
+	for _, item := range parser.itemMap {
+		cli.AllHelp[item.name] = formatHelp(item.name, item.alias, item.shortHelp, item.longHelp)
+	}
+	return cli
+}
+
+//─────────────┤ formatHelp ├─────────────
+
+func formatHelp(name, alias, short, long string) string {
+	name = strings.Trim(name, " \t")
+	s := strings.Trim(short, "\t\n ")
+	s = strings.TrimPrefix(s, name)
+	s = strings.TrimPrefix(s, ":")
+	s = strings.Trim(s, "\t\n ") + "\n"
+	var comb string
+	if len(alias) > 0 {
+		comb = name + " | " + alias
+	} else {
+		comb = name
+	}
+
+	var spc int
+	if len(comb) > 12 {
+		spc = 4
+	} else {
+		spc = 16 - len(comb)
+	}
+
+	s = comb + strings.Repeat(" ", spc) + s //+ "\n"
+	if len(long) == 0 {
+		return s
+	}
+
+	lng := strings.Split(long, "\n")
+	var ret []string
+	for _, l := range lng {
+		l = strings.Trim(l, "\t ")
+		l = strings.TrimPrefix(l, name)
+		l = strings.TrimPrefix(l, ":")
+		l = strings.Trim(l, "\t ")
+
+		ret = append(ret, l)
+	}
+	long = strings.Join(ret, "\n")
+	return s + long
+}
+
+//─────────────┤ getLimits ├─────────────
+
+func getLimits(h *helpParser) (int, int, int, int) {
+	var cmd = -1
+	var flg = -1
+	var lng = -1
+	var more = -1
+	for i, ln := range h.lines {
+		loc := h.commandsectionpat.FindStringIndex(ln)
+		if loc != nil {
+			cmd = i
+		}
+		loc = h.flagsectionpat.FindStringIndex(ln)
+		if loc != nil {
+			flg = i
+		}
+		loc = h.longsectionpat.FindStringIndex(ln)
+		if loc != nil {
+			lng = i
+		}
+		loc = h.moresectionpat.FindStringIndex(ln)
+		if loc != nil {
+			more = i
+		}
+	}
+	return cmd, flg, lng, more
 }
 
 //─────────────┤ scanUsage ├─────────────
 
 func scanUsage(h *helpParser) scanfunc {
-	loc := h.usagepat.FindStringIndex(h.Line()[h.Pos():])
+	loc := h.usagepat.FindStringIndex(h.lines[0])
 	if loc == nil {
 		return nil
 	}
 	if loc[0] > 0 {
 		return nil
 	}
-	h.setPos(h.Pos() + loc[1])
+	h.setPos(loc[1])
 	return scanCommand
 }
 
 //─────────────┤ scanCommand ├─────────────
 
 func scanCommand(h *helpParser) scanfunc {
+	// var trace = trace.New(os.Stderr)                                        //<rmv/>
+	// trace.Trace("----------------------------entering scanCommand \n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanCommand \n") //<rmv/>
+
 	if 2 >= len(h.lines) {
+		h.setError(newError(WrongFileFormat, "First line in help text must be Usage: etc. followed by blank line. See example"))
 		return nil
 	}
-	var found bool
-	var num int
-	for i := 2; i < len(h.lines); i++ { //requires a blank line before 'Commands'
-		loc := h.commandsectionpat.FindStringIndex(h.lines[i])
-		if loc != nil {
-			found = true
-			num = i
-			break
-		}
-	}
-	if !found {
+
+	if h.cmd == -1 {
 		return scanFlag
 	}
 
-	if num >= len(h.lines) {
-		return nil
+	var limit int
+	if h.flg != -1 && h.flg > h.cmd {
+		limit = h.flg
+	} else if h.lng != -1 && h.lng > h.cmd {
+		limit = h.lng
+	} else if h.more != -1 {
+		limit = h.more
+	} else {
+		limit = len(h.lines)
 	}
 
-	for i := num + 1; i < len(h.lines); i++ {
+	intType := reflect.TypeOf(int64(0))
+	boolType := reflect.TypeOf(true)
+	floatType := reflect.TypeOf(float64(0.0))
+	stringType := reflect.TypeOf("")
+	intSliceType := reflect.TypeOf([]int64{})
+	floatSliceType := reflect.TypeOf([]float64{})
+	stringSliceType := reflect.TypeOf([]string{})
+
+	for i := h.cmd + 1; i < limit; i++ {
 		pos := 0
 		line := strings.Trim(h.lines[i], "\t ")
 		if len(line) == 0 {
 			continue
 		}
-		loc := h.flagsectionpat.FindStringIndex(line)
-		if loc != nil {
-			return scanFlag
-		}
-
-		intType := reflect.TypeOf(int64(0))
-		boolType := reflect.TypeOf(true)
-		floatType := reflect.TypeOf(float64(0.0))
-		stringType := reflect.TypeOf("")
-		intSliceType := reflect.TypeOf([]int64{})
-		floatSliceType := reflect.TypeOf([]float64{})
-		stringSliceType := reflect.TypeOf([]string{})
 
 		item := cmdLineArg{}
 		item.Type = stringType // initial type is string
@@ -226,7 +303,6 @@ func scanCommand(h *helpParser) scanfunc {
 			}
 			item.required = true
 		}
-
 		sl := strings.Split(cmd, " | ")
 		if len(sl) > 1 {
 			cmd = strings.Trim(sl[0], "\t ")
@@ -234,7 +310,7 @@ func scanCommand(h *helpParser) scanfunc {
 		}
 
 		r := regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
-		loc = r.FindStringIndex(remnant)
+		loc := r.FindStringIndex(remnant)
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
@@ -256,10 +332,13 @@ func scanCommand(h *helpParser) scanfunc {
 
 		n := strings.Index(remnant, ":")
 		if n != -1 {
-			item.shortHelp = strings.Trim(remnant[n+1:], "\t \n")
+			item.shortHelp = cmd + "\t-" + strings.Trim(remnant[n+1:], "\t \n")
 		}
+
 		if len(cmd) > 0 {
 			item.name = cmd
+			item.longHelp = scanLong(h, cmd)
+			//trace.Trace("appending cmd", item) //<rmv/>
 			h.appendArg(item)
 		}
 	}
@@ -269,46 +348,37 @@ func scanCommand(h *helpParser) scanfunc {
 //─────────────┤ scanFlag ├─────────────
 
 func scanFlag(h *helpParser) scanfunc {
-	if 2 >= len(h.lines) {
-		return nil
-	}
-	var found bool
-	var num int
-	for i := 2; i < len(h.lines); i++ { //requires a blank line before 'Commands'
-		loc := h.flagsectionpat.FindStringIndex(h.lines[i])
-		if loc != nil {
-			found = true
-			num = i
-			break
-		}
-	}
+	// var trace = trace.New(os.Stderr)                                    //<rmv/>
+	// trace.Trace("----------------------------entering scanFlag\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanFlag\n") //<rmv/>
 
-	if !found {
+	if h.flg == -1 {
 		return nil
 	}
 
-	if num >= len(h.lines) {
-		return nil
+	var limit int
+	if h.lng != -1 && h.lng > h.flg {
+		limit = h.lng
+	} else if h.more != -1 {
+		limit = h.more
+	} else {
+		limit = len(h.lines)
 	}
 
-	for i := num + 1; i < len(h.lines); i++ {
+	intType := reflect.TypeOf(int64(0))
+	boolType := reflect.TypeOf(true)
+	floatType := reflect.TypeOf(float64(0.0))
+	stringType := reflect.TypeOf("")
+	intSliceType := reflect.TypeOf([]int64{})
+	floatSliceType := reflect.TypeOf([]float64{})
+	stringSliceType := reflect.TypeOf([]string{})
+
+	for i := h.flg + 1; i < limit; i++ {
 		pos := 0
 		line := strings.Trim(h.lines[i], "\t ")
 		if len(line) == 0 {
 			continue
 		}
-		loc := h.moresectionpat.FindStringIndex(line)
-		if loc != nil {
-			return nil
-		}
-
-		intType := reflect.TypeOf(int64(0))
-		boolType := reflect.TypeOf(true)
-		floatType := reflect.TypeOf(float64(0.0))
-		stringType := reflect.TypeOf("")
-		intSliceType := reflect.TypeOf([]int64{})
-		floatSliceType := reflect.TypeOf([]float64{})
-		stringSliceType := reflect.TypeOf([]string{})
 
 		item := cmdLineArg{}
 		item.Type = stringType // initial type is string
@@ -316,24 +386,28 @@ func scanFlag(h *helpParser) scanfunc {
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
 		meta := "*+#."
-		if len(line) > pos+3 {
-			if !strings.ContainsAny(line[pos:pos+3], meta) {
+		if len(line) > pos+4 {
+			if !strings.ContainsAny(line[pos:pos+4], meta) {
 				item.exclusive = false
 				item.isDefault = false
 			} else {
-				if strings.Contains(line[pos:pos+3], "*") {
+				if strings.Contains(line[pos:pos+4], "*") {
 					item.exclusive = true
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+3], "+") {
+				if strings.Contains(line[pos:pos+4], "+") {
 					item.isDefault = true
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+3], "#") {
+				if strings.Contains(line[pos:pos+4], "!") {
+					item.canHaveGlob = true
+					pos += 1
+				}
+				if strings.Contains(line[pos:pos+4], "#") {
 					item.Type = intType
 					pos += 1
 				}
-				if strings.Contains(line[pos:pos+3], ".") {
+				if strings.Contains(line[pos:pos+4], ".") {
 					item.Type = floatType
 					pos += 1
 				}
@@ -364,11 +438,9 @@ func scanFlag(h *helpParser) scanfunc {
 			flag = strings.Trim(sl[0], "\t ")
 			item.alias = strings.Trim(sl[1], "\t ")
 		}
-		if strings.Contains(line[pos:], "+") {
-			item.isDefault = true
-		}
+
 		r := regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
-		loc = r.FindStringIndex(remnant)
+		loc := r.FindStringIndex(remnant)
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
@@ -385,84 +457,106 @@ func scanFlag(h *helpParser) scanfunc {
 				}
 			}
 		} else {
-			item.Type = boolType
+			item.Type = boolType //no args to flag means its true if present
 		}
 		n := strings.Index(remnant, ":")
 		if n != -1 {
-			item.shortHelp = strings.Trim(remnant[n+1:], "\t \n")
+			item.shortHelp = flag + "\t-" + strings.Trim(remnant[n+1:], "\t \n")
 		}
+
 		item.isFlag = true
 		if len(flag) > 0 {
+			item.name = flag
+			item.longHelp = scanLong(h, flag)
+			//trace.Trace("appending flag ", item) //<rmv/>
 			h.appendArg(item)
 		}
 	}
 	return nil
 }
 
-// //─────────────┤ zeroValForType ├─────────────
+//─────────────┤ scanLong ├─────────────
 
-// func zeroValForType(t string) string {
-// 	if t == "string" {
-// 		return EmptyStr
-// 	}
+func scanLong(h *helpParser, name string) string {
+	// var trace = trace.New(os.Stderr)                                    //<rmv/>
+	// trace.Trace("----------------------------entering scanLong\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanLong\n") //<rmv/>
 
-// 	if t == "bool" {
-// 		return "false"
-// 	}
+	if len(name) == 0 {
+		return ""
+	}
 
-// 	var pre string
-// 	var slice bool
-// 	if strings.HasPrefix(t, "*") {
-// 		pre = "&"
-// 		t = t[1:]
-// 	}
+	if h.lng == -1 {
+		return ""
+	}
 
-// 	if strings.HasPrefix(t, "[") {
-// 		slice = true
-// 		t = t[1:]
-// 	}
+	var limit int
+	if h.more != -1 {
+		limit = h.more
+	} else {
+		limit = len(h.lines)
+	}
+	//trace.Trace("first line ", h.lines[h.lng+1]) //<rmv/>
+	var long []string
+	start, end := getLimitsForName(h.lines[h.lng+1:limit], name, h.lng)
+	//trace.Trace("start ", start) //<rmv/>
+	//trace.Trace("end ", end)     //<rmv/>
+	if start == -1 {
+		return ""
+	}
+	if start == h.lng { //dirty hack to fix off-by-one error
+		start++
+	}
 
-// 	if t == "string" {
-// 		if slice {
-// 			return "[]" + t + "{}"
-// 		}
-// 		if len(pre) != 0 {
-// 			return "nil"
-// 		}
-// 		return EmptyStr
-// 	}
-// 	if t == "bool" {
-// 		if slice {
-// 			return "[]" + t + "{}"
-// 		}
-// 		if len(pre) != 0 {
-// 			return "nil"
-// 		}
-// 		return "false"
-// 	}
-// 	if strings.HasPrefix(t, "float") {
-// 		if slice {
-// 			return "[]" + t + "{}"
-// 		}
-// 		if len(pre) != 0 {
-// 			return "nil"
-// 		}
-// 		return "0.0"
-// 	}
-// 	if strings.HasPrefix(t, "complex") {
-// 		if slice {
-// 			return "[]" + t + "{}"
-// 		}
-// 		if len(pre) != 0 {
-// 			return "nil"
-// 		}
-// 		return "(0 + 0i)"
-// 	}
+	long = h.lines[start:end]
+	//trace.Trace("long for ", name, long) //<rmv/>
+	return strings.Join(long, "\n")
+}
 
-// 	types := "int8 uint8 byte int16 uint16 int32 rune uint32 int64 uint64 int uint"
-// 	loc := helper.FindStringinString(types, t)
-// 	if len(loc) != 0 {
-// 		return "0"
-// 	}
-// 	return "nil"
-// }
+func getLimitsForName(lines []string, name string, i int) (int, int) {
+	// var trace = trace.New(os.Stderr)                                            //<rmv/>
+	// trace.Trace("----------------------------entering getLimitsForName\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving getLimitsForName\n") //<rmv/>
+
+	r := regexp.MustCompile(`^[[:print:]]+[[:blank:]]*:[[:blank:]]+`)
+	var start, end int
+	var found bool
+	for j, ln := range lines {
+		//trace.Trace("ln ", ln) //<rmv/>
+		loc := r.FindStringIndex(ln)
+		if loc != nil {
+			str := ln[loc[0]:loc[1]]
+			str = strings.Trim(str, "\t ")
+			str = strings.TrimSuffix(str, ":")
+			//trace.Trace("str (", str, ")") //<rmv/>
+			//	trace.Trace("name (", name, ")") //<rmv/>
+			if str == name {
+				start = j
+				found = true
+				//		trace.Trace("start ", start) //<rmv/>
+				break
+			}
+		}
+	}
+	if start < len(lines)-1 {
+		lines = lines[start+1:]
+		//trace.Trace("start ", start) //<rmv/>
+		var j int
+		for _, ln := range lines {
+			j++
+			loc := r.FindStringIndex(ln)
+			if loc != nil {
+				break
+			}
+		}
+		end = start + j + 1
+	} else {
+		end = start
+	}
+	if start == 0 && !found {
+		start = -1
+		end = start
+		return start, end
+	}
+	return start + i, end + i
+}

@@ -3,14 +3,12 @@ module github.com/westarver/boa
 go 1.18
 
 require (
-	github.com/bitfield/script v0.20.2
-	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
-	github.com/westarver/messenger v0.0.0-20220701000639-879643136c65
-	github.com/westarver/tracer v0.0.0-20220701000543-23a9c7e36ece
+	github.com/westarver/helper v0.0.0-20220801160916-316c8c0df1a6
+	gopkg.in/godo.v2 v2.0.9
 )
 
 require (
-	bitbucket.org/creachadair/shell v0.0.7 // indirect
-	github.com/itchyny/gojq v0.12.7 // indirect
-	github.com/itchyny/timefmt-go v0.1.3 // indirect
+	github.com/MichaelTJones/walk v0.0.0-20161122175330-4748e29d5718 // indirect
+	github.com/mgutz/str v1.2.0 // indirect
+	github.com/rhysd/abspath v0.0.0-20200817132137-9532ba017882 // indirect
 )
