@@ -2,11 +2,8 @@ package boa
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
-
-	trace "github.com/westarver/tracer"
 )
 
 func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
@@ -45,9 +42,6 @@ func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
 }
 
 func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any) {
-	var trace = trace.New(os.Stderr)                             //<rmv/>
-	trace.Trace("--------------------entering getCmdValues")     //<rmv/>
-	defer trace.Trace("-------------------leaving getCmdValues") //<rmv/>
 
 	intType := reflect.TypeOf(int64(0))
 	boolType := reflect.TypeOf(true)
