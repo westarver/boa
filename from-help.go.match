@@ -215,6 +215,9 @@ func scanUsage(h *helpParser) scanfunc {
 //─────────────┤ scanCommand ├─────────────
 
 func scanCommand(h *helpParser) scanfunc {
+	// var trace = trace.New(os.Stderr)                                        //<rmv/>
+	// trace.Trace("----------------------------entering scanCommand \n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanCommand \n") //<rmv/>
 
 	if 2 >= len(h.lines) {
 		h.setError(newError(WrongFileFormat, "First line in help text must be Usage: etc. followed by blank line. See example"))
@@ -335,6 +338,7 @@ func scanCommand(h *helpParser) scanfunc {
 		if len(cmd) > 0 {
 			item.name = cmd
 			item.longHelp = scanLong(h, cmd)
+			//trace.Trace("appending cmd", item) //<rmv/>
 			h.appendArg(item)
 		}
 	}
@@ -344,6 +348,9 @@ func scanCommand(h *helpParser) scanfunc {
 //─────────────┤ scanFlag ├─────────────
 
 func scanFlag(h *helpParser) scanfunc {
+	// var trace = trace.New(os.Stderr)                                    //<rmv/>
+	// trace.Trace("----------------------------entering scanFlag\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanFlag\n") //<rmv/>
 
 	if h.flg == -1 {
 		return nil
@@ -457,6 +464,7 @@ func scanFlag(h *helpParser) scanfunc {
 		if len(flag) > 0 {
 			item.name = flag
 			item.longHelp = scanLong(h, flag)
+			//trace.Trace("appending flag ", item) //<rmv/>
 			h.appendArg(item)
 		}
 	}
@@ -466,6 +474,9 @@ func scanFlag(h *helpParser) scanfunc {
 //─────────────┤ scanLong ├─────────────
 
 func scanLong(h *helpParser, name string) string {
+	// var trace = trace.New(os.Stderr)                                    //<rmv/>
+	// trace.Trace("----------------------------entering scanLong\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving scanLong\n") //<rmv/>
 
 	if len(name) == 0 {
 		return ""
@@ -481,8 +492,11 @@ func scanLong(h *helpParser, name string) string {
 	} else {
 		limit = len(h.lines)
 	}
+	//trace.Trace("first line ", h.lines[h.lng+1]) //<rmv/>
 	var long []string
 	start, end := getLimitsForName(h.lines[h.lng+1:limit], name, h.lng)
+	//trace.Trace("start ", start) //<rmv/>
+	//trace.Trace("end ", end)     //<rmv/>
 	if start == -1 {
 		return ""
 	}
@@ -491,29 +505,38 @@ func scanLong(h *helpParser, name string) string {
 	}
 
 	long = h.lines[start:end]
+	//trace.Trace("long for ", name, long) //<rmv/>
 	return strings.Join(long, "\n")
 }
 
 func getLimitsForName(lines []string, name string, i int) (int, int) {
+	// var trace = trace.New(os.Stderr)                                            //<rmv/>
+	// trace.Trace("----------------------------entering getLimitsForName\n")      //<rmv/>
+	// defer trace.Trace("----------------------------leaving getLimitsForName\n") //<rmv/>
 
 	r := regexp.MustCompile(`^[[:print:]]+[[:blank:]]*:[[:blank:]]+`)
 	var start, end int
 	var found bool
 	for j, ln := range lines {
+		//trace.Trace("ln ", ln) //<rmv/>
 		loc := r.FindStringIndex(ln)
 		if loc != nil {
 			str := ln[loc[0]:loc[1]]
 			str = strings.Trim(str, "\t ")
 			str = strings.TrimSuffix(str, ":")
+			//trace.Trace("str (", str, ")") //<rmv/>
+			//	trace.Trace("name (", name, ")") //<rmv/>
 			if str == name {
 				start = j
 				found = true
+				//		trace.Trace("start ", start) //<rmv/>
 				break
 			}
 		}
 	}
 	if start < len(lines)-1 {
 		lines = lines[start+1:]
+		//trace.Trace("start ", start) //<rmv/>
 		var j int
 		for _, ln := range lines {
 			j++
@@ -533,5 +556,3 @@ func getLimitsForName(lines []string, name string, i int) (int, int) {
 	}
 	return start + i, end + i
 }
-
-

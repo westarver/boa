@@ -31,5 +31,3 @@ func newError(code parseErrCode, fmtstr string, args ...any) parseError {
 		err:  fmt.Errorf(fmtstr, args...),
 	}
 }
-
-
