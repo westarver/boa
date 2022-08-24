@@ -3,11 +3,10 @@ package boa
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 
-	"github.com/westarver/helper"
+	"github.com/bitfield/script"
 )
 
 const (
@@ -28,7 +27,7 @@ type helpParser struct {
 	flagsectionpat    *regexp.Regexp
 	moresectionpat    *regexp.Regexp
 	longsectionpat    *regexp.Regexp
-	itemMap           map[string]cmdLineArg
+	itemMap           map[string]CmdLineItem
 	text              string
 	lines             []string
 	errs              []parseError
@@ -40,7 +39,7 @@ type helpParser struct {
 	more              int
 }
 
-func (h *helpParser) appendArg(a cmdLineArg) {
+func (h *helpParser) appendArg(a CmdLineItem) {
 	h.itemMap[a.name] = a
 }
 
@@ -91,15 +90,16 @@ func (h *helpParser) Errors() string {
 }
 
 func FromHelp(helpstring string) *CLI {
+	lines, _ := script.Echo(helpstring).Slice()
 	parser := helpParser{
 		usagepat:          regexp.MustCompile(Usagepat),
 		commandsectionpat: regexp.MustCompile(CommandSectionPat),
 		flagsectionpat:    regexp.MustCompile(FlagSectionPat),
 		moresectionpat:    regexp.MustCompile(MoreSectionPat),
 		longsectionpat:    regexp.MustCompile(LongSectionPat),
-		itemMap:           map[string]cmdLineArg{},
+		itemMap:           map[string]CmdLineItem{},
 		text:              "",
-		lines:             helper.GetLinesFromString(helpstring),
+		lines:             lines,
 		errs:              []parseError{},
 		pos:               0,
 		line:              0,
@@ -236,14 +236,6 @@ func scanCommand(h *helpParser) scanfunc {
 		limit = len(h.lines)
 	}
 
-	intType := reflect.TypeOf(int64(0))
-	boolType := reflect.TypeOf(true)
-	floatType := reflect.TypeOf(float64(0.0))
-	stringType := reflect.TypeOf("")
-	intSliceType := reflect.TypeOf([]int64{})
-	floatSliceType := reflect.TypeOf([]float64{})
-	stringSliceType := reflect.TypeOf([]string{})
-
 	for i := h.cmd + 1; i < limit; i++ {
 		pos := 0
 		line := strings.Trim(h.lines[i], "\t ")
@@ -251,8 +243,8 @@ func scanCommand(h *helpParser) scanfunc {
 			continue
 		}
 
-		item := cmdLineArg{}
-		item.Type = stringType // initial type is string
+		item := CmdLineItem{}
+		item.Type = StringType // initial type is string
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -271,11 +263,11 @@ func scanCommand(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
-					item.Type = intType
+					item.Type = IntType
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
-					item.Type = floatType
+					item.Type = FloatType
 					pos += 1
 				}
 			}
@@ -312,19 +304,19 @@ func scanCommand(h *helpParser) scanfunc {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
 					switch item.Type {
-					case stringType:
-						item.Type = stringSliceType
-					case intType:
-						item.Type = intSliceType
-					case floatType:
-						item.Type = floatSliceType
+					case StringType:
+						item.Type = StringSliceType
+					case IntType:
+						item.Type = IntSliceType
+					case FloatType:
+						item.Type = FloatSliceType
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
 					}
 				}
 			}
 		} else {
-			item.Type = boolType
+			item.Type = BoolType
 		}
 
 		n := strings.Index(remnant, ":")
@@ -358,14 +350,6 @@ func scanFlag(h *helpParser) scanfunc {
 		limit = len(h.lines)
 	}
 
-	intType := reflect.TypeOf(int64(0))
-	boolType := reflect.TypeOf(true)
-	floatType := reflect.TypeOf(float64(0.0))
-	stringType := reflect.TypeOf("")
-	intSliceType := reflect.TypeOf([]int64{})
-	floatSliceType := reflect.TypeOf([]float64{})
-	stringSliceType := reflect.TypeOf([]string{})
-
 	for i := h.flg + 1; i < limit; i++ {
 		pos := 0
 		line := strings.Trim(h.lines[i], "\t ")
@@ -373,8 +357,8 @@ func scanFlag(h *helpParser) scanfunc {
 			continue
 		}
 
-		item := cmdLineArg{}
-		item.Type = stringType // initial type is string
+		item := CmdLineItem{}
+		item.Type = StringType // initial type is string
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -393,11 +377,11 @@ func scanFlag(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
-					item.Type = intType
+					item.Type = IntType
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
-					item.Type = floatType
+					item.Type = FloatType
 					pos += 1
 				}
 			}
@@ -434,19 +418,19 @@ func scanFlag(h *helpParser) scanfunc {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
 					switch item.Type {
-					case stringType:
-						item.Type = stringSliceType
-					case intType:
-						item.Type = intSliceType
-					case floatType:
-						item.Type = floatSliceType
+					case StringType:
+						item.Type = StringSliceType
+					case IntType:
+						item.Type = IntSliceType
+					case FloatType:
+						item.Type = FloatSliceType
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
 					}
 				}
 			}
 		} else {
-			item.Type = boolType //no args to flag means its true if present
+			item.Type = BoolType //no args to flag means its true if present
 		}
 		n := strings.Index(remnant, ":")
 		if n != -1 {
@@ -495,7 +479,6 @@ func scanLong(h *helpParser, name string) string {
 }
 
 func getLimitsForName(lines []string, name string, i int) (int, int) {
-
 	r := regexp.MustCompile(`^[[:print:]]+[[:blank:]]*:[[:blank:]]+`)
 	var start, end int
 	var found bool
@@ -527,11 +510,7 @@ func getLimitsForName(lines []string, name string, i int) (int, int) {
 		end = start
 	}
 	if start == 0 && !found {
-		start = -1
-		end = start
-		return start, end
+		return -1, -1
 	}
 	return start + i, end + i
 }
-
-

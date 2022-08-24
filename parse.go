@@ -2,12 +2,11 @@ package boa
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 )
 
-func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
-	var cli = CLI{Items: make(map[string]any, len(args))}
+func ParseCommandLineArgs(cmds map[string]CmdLineItem, args []string) *CLI {
+	var cli = CLI{Items: make(map[string]CmdLineItem, len(args))}
 	var n = 0
 	for i := 0; i < len(args); i++ {
 		a := args[n]
@@ -18,13 +17,13 @@ func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
 				break
 			}
 		}
-		//a = strings.TrimPrefix(a, "--")
+
 		args[n] = a // in case the alias was normalized the proper value must be passed to getCmdValues
 
 		m, cm := getCmdValues(cmds, a, args[n:])
 		n += m
 		if cm != nil {
-			cli.Items[cm.(GenericArg).Name()] = cm
+			cli.Items[cm.Name()] = *cm
 		} else {
 			cli.SetError(fmt.Errorf("%s - invalid command line parameter", a))
 		}
@@ -35,16 +34,7 @@ func ParseCommandLineArgs(cmds map[string]cmdLineArg, args []string) *CLI {
 	return &cli
 }
 
-func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any) {
-
-	intType := reflect.TypeOf(int64(0))
-	boolType := reflect.TypeOf(true)
-	floatType := reflect.TypeOf(float64(0.0))
-	stringType := reflect.TypeOf("")
-	intSliceType := reflect.TypeOf([]int64{})
-	floatSliceType := reflect.TypeOf([]float64{})
-	stringSliceType := reflect.TypeOf([]string{})
-
+func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *CmdLineItem) {
 	cm, exist := cmds[a]
 	if !exist {
 		cm, exist = cmds["--"+a]
@@ -57,74 +47,40 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 		return 1, nil
 	}
 
+	result := CmdLineItem{
+		Type:        cm.Type,
+		name:        a,
+		alias:       cm.alias,
+		shortHelp:   cm.shortHelp,
+		longHelp:    cm.longHelp,
+		isDefault:   cm.isDefault,
+		isFlag:      cm.isFlag,
+		exclusive:   cm.exclusive,
+		required:    cm.required,
+		requiredOr:  cm.requiredOr,
+		requiredAnd: cm.requiredAnd,
+	}
+
 	switch cm.Type {
-	case boolType:
-		cm1 := CmdLineItem[bool]{
-			value:       true,
-			name:        a,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return 1, cm1
-	case intType:
+	case BoolType:
+		result.value = true
+		return 1, &result
+	case IntType:
 		n, _ := strconv.ParseInt(args[1], 10, 64)
-		cm1 := CmdLineItem[int]{
-			value:       int(n),
-			name:        a,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return 2, cm1
-	case floatType:
+		result.value = int(n)
+		return 2, &result
+	case FloatType:
 		n, _ := strconv.ParseFloat(args[1], 64)
-		cm1 := CmdLineItem[float64]{
-			value:       n,
-			name:        a,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return 2, cm1
-	case stringType:
+		result.value = n
+		return 2, &result
+	case StringType:
 		var str = ""
 		if len(args) > 1 {
 			str = args[1]
 		}
-		cm1 := CmdLineItem[string]{
-			value:       str,
-			name:        a,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return 2, cm1
-	case intSliceType:
+		result.value = str
+		return 2, &result
+	case IntSliceType:
 		var j int
 		var val []int
 		for i, a := range args[1:] {
@@ -136,21 +92,9 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 			val = append(val, int(n))
 			j = i + 1
 		}
-		cm1 := CmdLineItem[[]int]{
-			value:       val,
-			name:        cm.name,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return j + 1, cm1
-	case floatSliceType:
+		result.value = val
+		return j + 1, &result
+	case FloatSliceType:
 		var j int
 		var val []float64
 		for i, a := range args[1:] {
@@ -162,21 +106,9 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 			val = append(val, n)
 			j = i + 1
 		}
-		cm1 := CmdLineItem[[]float64]{
-			value:       val,
-			name:        cm.name,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return j + 1, cm1
-	case stringSliceType:
+		result.value = val
+		return j + 1, &result
+	case StringSliceType:
 		var j int
 		var val []string
 		for i, a := range args[1:] {
@@ -187,24 +119,9 @@ func getCmdValues(cmds map[string]cmdLineArg, a string, args []string) (int, any
 			val = append(val, a)
 			j = i + 1
 		}
-		cm1 := CmdLineItem[[]string]{
-			value:       val,
-			name:        cm.name,
-			alias:       cm.alias,
-			shortHelp:   cm.shortHelp,
-			longHelp:    cm.longHelp,
-			isDefault:   cm.isDefault,
-			isFlag:      cm.isFlag,
-			exclusive:   cm.exclusive,
-			required:    cm.required,
-			requiredOr:  cm.requiredOr,
-			requiredAnd: cm.requiredAnd,
-		}
-		return j + 1, cm1
-
+		result.value = val
+		return j + 1, &result
 	default:
 	}
 	return 1, nil
 }
-
-
