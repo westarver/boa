@@ -90,11 +90,7 @@ func (h *helpParser) Errors() string {
 	return strings.Join(errs, "\n")
 }
 
-<<<<<<< HEAD
 func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
-=======
-func FromHelp(helpstring string) *CLI {
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 	lines, _ := script.Echo(helpstring).Slice()
 	parser := helpParser{
 		usagepat:          regexp.MustCompile(Usagepat),
@@ -252,11 +248,8 @@ func scanCommand(h *helpParser) scanfunc {
 		}
 
 		item := CmdLineItem{}
-<<<<<<< HEAD
+
 		item.paramType = TypeString // initial type is string
-=======
-		item.Type = StringType // initial type is string
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -275,19 +268,11 @@ func scanCommand(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
-<<<<<<< HEAD
 					item.paramType = TypeInt
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
 					item.paramType = TypeFloat
-=======
-					item.Type = IntType
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], ".") {
-					item.Type = FloatType
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					pos += 1
 				}
 			}
@@ -329,7 +314,6 @@ func scanCommand(h *helpParser) scanfunc {
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
-<<<<<<< HEAD
 					switch item.paramType {
 					case TypeString:
 						item.paramType = TypeStringSlice
@@ -337,15 +321,6 @@ func scanCommand(h *helpParser) scanfunc {
 						item.paramType = TypeIntSlice
 					case TypeFloat:
 						item.paramType = TypeFloatSlice
-=======
-					switch item.Type {
-					case StringType:
-						item.Type = StringSliceType
-					case IntType:
-						item.Type = IntSliceType
-					case FloatType:
-						item.Type = FloatSliceType
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
 					}
@@ -362,13 +337,8 @@ func scanCommand(h *helpParser) scanfunc {
 				}
 			}
 		} else {
-<<<<<<< HEAD
 			item.paramType = TypeBool
-=======
-			item.Type = BoolType
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		}
-
 		n := strings.Index(remnant, ":")
 		if n != -1 {
 			item.shortHelp = cmd + "\t-" + strings.Trim(remnant[n+1:], "\t \n")
@@ -409,11 +379,7 @@ func scanFlag(h *helpParser) scanfunc {
 		}
 
 		item := CmdLineItem{}
-<<<<<<< HEAD
 		item.paramType = TypeString // initial type is string
-=======
-		item.Type = StringType // initial type is string
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -432,19 +398,11 @@ func scanFlag(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
-<<<<<<< HEAD
 					item.paramType = TypeInt
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
 					item.paramType = TypeFloat
-=======
-					item.Type = IntType
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], ".") {
-					item.Type = FloatType
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					pos += 1
 				}
 			}
@@ -486,7 +444,6 @@ func scanFlag(h *helpParser) scanfunc {
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
-<<<<<<< HEAD
 					switch item.paramType {
 					case TypeString:
 						item.paramType = TypeStringSlice
@@ -494,15 +451,6 @@ func scanFlag(h *helpParser) scanfunc {
 						item.paramType = TypeIntSlice
 					case TypeFloat:
 						item.paramType = TypeFloatSlice
-=======
-					switch item.Type {
-					case StringType:
-						item.Type = StringSliceType
-					case IntType:
-						item.Type = IntSliceType
-					case FloatType:
-						item.Type = FloatSliceType
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
 					}
@@ -519,11 +467,7 @@ func scanFlag(h *helpParser) scanfunc {
 				}
 			}
 		} else {
-<<<<<<< HEAD
 			item.paramType = TypeBool //no args to flag means its true if present
-=======
-			item.Type = BoolType //no args to flag means its true if present
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		}
 		n := strings.Index(remnant, ":")
 		if n != -1 {
@@ -569,9 +513,9 @@ func scanLong(h *helpParser, name string) string {
 	}
 
 	long = h.lines[start:end]
-	for _, s := range long {
-		s = strings.TrimPrefix(s, name)
-		s = strings.Trim(s, "\t ")
+	for i := range long {
+		long[i] = strings.TrimPrefix(long[i], name)
+		long[i] = strings.Trim(long[i], "\t ")
 	}
 	return strings.Join(long, "\n")
 }

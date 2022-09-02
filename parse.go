@@ -48,12 +48,8 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 	}
 
 	result := CmdLineItem{
-<<<<<<< HEAD
 		paramType:   cm.paramType,
 		value:       nil,
-=======
-		Type:        cm.Type,
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		name:        a,
 		alias:       cm.alias,
 		shortHelp:   cm.shortHelp,
@@ -64,7 +60,6 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 		required:    cm.required,
 		requiredOr:  cm.requiredOr,
 		requiredAnd: cm.requiredAnd,
-<<<<<<< HEAD
 		id:          cm.id,
 		paramOpt:    cm.paramOpt,
 		paramCount:  0,
@@ -119,30 +114,6 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 		result.paramCount = 1
 		return 2, &result
 	case TypeIntSlice:
-=======
-	}
-
-	switch cm.Type {
-	case BoolType:
-		result.value = true
-		return 1, &result
-	case IntType:
-		n, _ := strconv.ParseInt(args[1], 10, 64)
-		result.value = int(n)
-		return 2, &result
-	case FloatType:
-		n, _ := strconv.ParseFloat(args[1], 64)
-		result.value = n
-		return 2, &result
-	case StringType:
-		var str = ""
-		if len(args) > 1 {
-			str = args[1]
-		}
-		result.value = str
-		return 2, &result
-	case IntSliceType:
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		var j int
 		var val []int
 		if len(args) <= 1 {
@@ -160,14 +131,9 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 			j = i + 1
 		}
 		result.value = val
-<<<<<<< HEAD
 		result.paramCount = j
 		return j + 1, &result
 	case TypeFloatSlice:
-=======
-		return j + 1, &result
-	case FloatSliceType:
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		var j int
 		var val []float64
 		if len(args) <= 1 {
@@ -185,14 +151,9 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 			j = i + 1
 		}
 		result.value = val
-<<<<<<< HEAD
 		result.paramCount = j
 		return j + 1, &result
 	case TypeStringSlice:
-=======
-		return j + 1, &result
-	case StringSliceType:
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		var j int
 		var val []string
 		if len(args) <= 1 {
@@ -209,10 +170,7 @@ func getCmdValues(cmds map[string]CmdLineItem, a string, args []string) (int, *C
 			j = i + 1
 		}
 		result.value = val
-<<<<<<< HEAD
 		result.paramCount = j
-=======
->>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		return j + 1, &result
 	default:
 	}
