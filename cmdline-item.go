@@ -122,7 +122,11 @@ func (C *CLI) Help(topic string, ty ...HelpType) string {
 }
 
 type CmdLineItem struct {
+<<<<<<< HEAD
+	paramType   ParamType
+=======
 	Type        ValueType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 	value       any
 	name        string
 	alias       string
@@ -134,6 +138,9 @@ type CmdLineItem struct {
 	required    bool
 	requiredOr  []string
 	requiredAnd []string
+	id          int // use as index to order the commands as read
+	paramOpt    bool
+	paramCount  int
 }
 
 // (CmdLineItem) Name returns the value of the unexported struct field name
@@ -186,9 +193,34 @@ func (C CmdLineItem) RequiredAnd() []string {
 	return C.requiredAnd
 }
 
+<<<<<<< HEAD
+func (C CmdLineItem) ID() int {
+	return C.id
+}
+
+func (C CmdLineItem) ParamCount() int {
+	return C.paramCount
+}
+
+func (C CmdLineItem) ParamOpt() bool {
+	return C.paramOpt
+}
+
+func (C CmdLineItem) ParamType() ParamType {
+	return C.paramType
+}
+
 // (*CmdLineItem.Value()returns the value of the unexported struct field value
 // this function will require a concrete type assertion.
 // call using strval := obj.Value().(string)
 func (C CmdLineItem) Value() any {
 	return C.value
 }
+=======
+// (*CmdLineItem.Value()returns the value of the unexported struct field value
+// this function will require a concrete type assertion.
+// call using strval := obj.Value().(string)
+func (C CmdLineItem) Value() any {
+	return C.value
+}
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/bitfield/script"
@@ -89,7 +90,11 @@ func (h *helpParser) Errors() string {
 	return strings.Join(errs, "\n")
 }
 
+<<<<<<< HEAD
+func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
+=======
 func FromHelp(helpstring string) *CLI {
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 	lines, _ := script.Echo(helpstring).Slice()
 	parser := helpParser{
 		usagepat:          regexp.MustCompile(Usagepat),
@@ -118,12 +123,15 @@ func FromHelp(helpstring string) *CLI {
 		}
 		scanf = scanf(&parser)
 	}
+	return parser.itemMap, parser.Errors()
+}
 
-	fmt.Fprintln(os.Stderr, parser.Errors())
-
-	cli := ParseCommandLineArgs(parser.itemMap, os.Args[1:])
+func FromHelp(helpstring string, args []string) *CLI {
+	items, errs := CollectItems(helpstring)
+	fmt.Fprintln(os.Stderr, errs)
+	cli := ParseCommandLineArgs(items, args)
 	cli.AllHelp = make(map[string]string)
-	for _, item := range parser.itemMap {
+	for _, item := range items {
 		cli.AllHelp[item.name] = formatHelp(item.name, item.alias, item.shortHelp, item.longHelp)
 	}
 	return cli
@@ -151,7 +159,7 @@ func formatHelp(name, alias, short, long string) string {
 		spc = 16 - len(comb)
 	}
 
-	s = comb + strings.Repeat(" ", spc) + s //+ "\n"
+	s = comb + strings.Repeat(" ", spc) + s
 	if len(long) == 0 {
 		return s
 	}
@@ -244,7 +252,11 @@ func scanCommand(h *helpParser) scanfunc {
 		}
 
 		item := CmdLineItem{}
+<<<<<<< HEAD
+		item.paramType = TypeString // initial type is string
+=======
 		item.Type = StringType // initial type is string
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -263,11 +275,19 @@ func scanCommand(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
+<<<<<<< HEAD
+					item.paramType = TypeInt
+					pos += 1
+				}
+				if strings.Contains(line[pos:pos+3], ".") {
+					item.paramType = TypeFloat
+=======
 					item.Type = IntType
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
 					item.Type = FloatType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					pos += 1
 				}
 			}
@@ -298,11 +318,26 @@ func scanCommand(h *helpParser) scanfunc {
 			item.alias = strings.Trim(sl[1], "\t ")
 		}
 
-		r := regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
+		r := regexp.MustCompile(`\[<[a-zA-Z0-9-_.]*>\]`)
 		loc := r.FindStringIndex(remnant)
+		if loc != nil {
+			item.paramOpt = true
+		}
+
+		r = regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
+		loc = r.FindStringIndex(remnant)
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
+<<<<<<< HEAD
+					switch item.paramType {
+					case TypeString:
+						item.paramType = TypeStringSlice
+					case TypeInt:
+						item.paramType = TypeIntSlice
+					case TypeFloat:
+						item.paramType = TypeFloatSlice
+=======
 					switch item.Type {
 					case StringType:
 						item.Type = StringSliceType
@@ -310,13 +345,28 @@ func scanCommand(h *helpParser) scanfunc {
 						item.Type = IntSliceType
 					case FloatType:
 						item.Type = FloatSliceType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
+					}
+					item.paramCount = -1
+				} else {
+					r = regexp.MustCompile(`\([0-9]\)*`)
+					loc = r.FindStringIndex(remnant)
+					if loc != nil {
+						num := remnant[loc[0]:loc[1]]
+						num = strings.TrimPrefix(strings.TrimSuffix(num, ")"), "(")
+						pnum, _ := strconv.ParseInt(num, 10, 32)
+						item.paramCount = int(pnum)
 					}
 				}
 			}
 		} else {
+<<<<<<< HEAD
+			item.paramType = TypeBool
+=======
 			item.Type = BoolType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		}
 
 		n := strings.Index(remnant, ":")
@@ -327,6 +377,7 @@ func scanCommand(h *helpParser) scanfunc {
 		if len(cmd) > 0 {
 			item.name = cmd
 			item.longHelp = scanLong(h, cmd)
+			item.id = i
 			h.appendArg(item)
 		}
 	}
@@ -358,7 +409,11 @@ func scanFlag(h *helpParser) scanfunc {
 		}
 
 		item := CmdLineItem{}
+<<<<<<< HEAD
+		item.paramType = TypeString // initial type is string
+=======
 		item.Type = StringType // initial type is string
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 
 		// scan for meta characters before command name, interpret
 		// * means exclusive, + means default, # means int, . means float
@@ -377,11 +432,19 @@ func scanFlag(h *helpParser) scanfunc {
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], "#") {
+<<<<<<< HEAD
+					item.paramType = TypeInt
+					pos += 1
+				}
+				if strings.Contains(line[pos:pos+3], ".") {
+					item.paramType = TypeFloat
+=======
 					item.Type = IntType
 					pos += 1
 				}
 				if strings.Contains(line[pos:pos+3], ".") {
 					item.Type = FloatType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					pos += 1
 				}
 			}
@@ -412,11 +475,26 @@ func scanFlag(h *helpParser) scanfunc {
 			item.alias = strings.Trim(sl[1], "\t ")
 		}
 
-		r := regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
+		r := regexp.MustCompile(`\[<[a-zA-Z0-9-_.]*>\]`)
 		loc := r.FindStringIndex(remnant)
+		if loc != nil {
+			item.paramOpt = true
+		}
+
+		r = regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
+		loc = r.FindStringIndex(remnant)
 		if loc != nil {
 			if len(remnant) >= loc[1]+3 {
 				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
+<<<<<<< HEAD
+					switch item.paramType {
+					case TypeString:
+						item.paramType = TypeStringSlice
+					case TypeInt:
+						item.paramType = TypeIntSlice
+					case TypeFloat:
+						item.paramType = TypeFloatSlice
+=======
 					switch item.Type {
 					case StringType:
 						item.Type = StringSliceType
@@ -424,13 +502,28 @@ func scanFlag(h *helpParser) scanfunc {
 						item.Type = IntSliceType
 					case FloatType:
 						item.Type = FloatSliceType
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 					default:
 						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
+					}
+					item.paramCount = -1
+				} else {
+					r = regexp.MustCompile(`\([0-9]\)*`)
+					loc = r.FindStringIndex(remnant)
+					if loc != nil {
+						num := remnant[loc[0]:loc[1]]
+						num = strings.TrimPrefix(strings.TrimSuffix(num, ")"), "(")
+						pnum, _ := strconv.ParseInt(num, 10, 32)
+						item.paramCount = int(pnum)
 					}
 				}
 			}
 		} else {
+<<<<<<< HEAD
+			item.paramType = TypeBool //no args to flag means its true if present
+=======
 			item.Type = BoolType //no args to flag means its true if present
+>>>>>>> ddb2b57a0cb42366fc393fe1a983ecea453ad4b8
 		}
 		n := strings.Index(remnant, ":")
 		if n != -1 {
@@ -441,6 +534,7 @@ func scanFlag(h *helpParser) scanfunc {
 		if len(flag) > 0 {
 			item.name = flag
 			item.longHelp = scanLong(h, flag)
+			item.id = i
 			h.appendArg(item)
 		}
 	}
@@ -475,6 +569,10 @@ func scanLong(h *helpParser, name string) string {
 	}
 
 	long = h.lines[start:end]
+	for _, s := range long {
+		s = strings.TrimPrefix(s, name)
+		s = strings.Trim(s, "\t ")
+	}
 	return strings.Join(long, "\n")
 }
 
