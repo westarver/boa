@@ -2,34 +2,254 @@ package boa
 
 import "fmt"
 
-type parseError struct {
-	code parseErrCode
-	err  error
+type ParseError struct {
+	Code ParseErrCode
+	Err  error
 }
 
-type parseErrCode int
+type ParseErrCode int
 
 const (
-	NoFileGiven parseErrCode = iota
-	NoNameGiven
-	WrongFileFormat
-	FileReadError
-	DataIncomplete
-	NoStructField
-	NoKeyValuePair
-	NoSectionText
-	UnsupportedType
+	//errors from reading input script
+	BeExternalError ParseErrCode = iota
+	//"expecting a file path for input script"
+	BeNoFileGiven
+	//"input script is not formatted as a Boa input script"
+	BeWrongFileFormat
+	//"cannot read input script %s"
+	BeFileReadError
+	//"section %s has no content at line %d"
+	BeNoSectionText
+	// "unsupported argument type at line %d"
+	BeUnsupportedType
+	//"reached end of input script"
+	BeEofError
+	//"line only contains meta characters"
+	BeBadMetaLine
+	//"meta character string is not at beginning of line"
+	BeMetaNotStart
+	//"command or flag in input script cannot be  parsed"
+	BeNoCommandName
+
+	//errors from parsing command/flag arguments
+
+	//"item %s is exclusive but was found with %s"
+	BeNoExclusiveItem
+	//"item %s is required but was not found"
+	BeNoRequiredItem
+	//"command or flag passed on command line is not recognized"
+	BeInvalidCommand
+	//"argument for %s not found"
+	BeNoRequiredString
+	//"integer argument for %s not found"
+	BeNoRequiredInt
+	//"real number argument for %s not found"
+	BeNoRequiredFloat
+	//"date argument for %s not found"
+	BeNoRequiredDate
+	// "time argument for %s not found"
+	BeNoRequiredTime
+	//"time duration argument for %s not found"
+	BeNoRequiredDuration
+	//"file path argument for %s not found"
+	BeNoRequiredPath
+	//"URL argument for %s not found"
+	BeNoRequiredURL
+	//"Email address argument for %s npt found"
+	BeNoRequiredEmail
+	//"Phone number argument for %s not found"
+	BeNoRequiredPhone
+	//"IP address argument for %s not found"
+	BeNoRequiredIPv4
+	//"%s, argument for %s, cannot be interpreted as a boolean"
+	BeNotABool
+	//"%s, argument for %s, cannot be interpreted as an integer"
+	BeNotAnInt
+	// "%s, argument for %s, cannot be interpreted as a real number"
+	BeNotAFloat
+	// "argument to %s, %s is not a valid date value such as '01-01-2022'"
+	BeNotADate
+	//"argument to %s, %s is not a valid time value such as '3:45PM'"
+	BeNotATime
+	//"argument to %s, %s is not a valid duration value such as '1h10m20s'"
+	BeNotADuration
+	//"%s, argument for %s, cannot be interpreted as an email address"
+	BeNotAnEmail
+	//"%s, argument for %s, cannot be interpreted as a phone number"
+	BeNotAPhone
+	//"%s, argument for %s, cannot be interpreted as a file path"
+	BeNotAPath
+	//"%s, argument for %s, cannot be interpreted as a URL"
+	BeNotAURL
+	//"%s, argument for %s, cannot be interpreted as an IP address of IPv4 format"
+	BeNotAnIPv4
 )
 
-func (e parseError) Error() string {
-	return fmt.Sprintf("error parsing design data with code %d: %s", e.code, e.err.Error())
+func (e ParseErrCode) String() string {
+	switch e {
+	//errors from reading input script
+	case BeExternalError:
+		return "ExternalError"
+	case BeNoFileGiven:
+		return "NoFileGiven"
+	case BeWrongFileFormat:
+		return "WrongFileFormat"
+	case BeFileReadError:
+		return "FileReadError"
+	case BeNoSectionText:
+		return "NoSectionText"
+	case BeUnsupportedType:
+		return "UnsupportedType"
+	case BeEofError:
+		return "BeEofError"
+	case BeBadMetaLine:
+		return "BadMetaLine"
+	case BeMetaNotStart:
+		return "MetaNotStart"
+	case BeNoCommandName:
+		return "NoCommandName"
+
+	// errors from parsing command/flag arguments
+
+	case BeNoExclusiveItem:
+		return "NoExclusiveItem"
+	case BeNoRequiredItem:
+		return "NoRequiredItem"
+	case BeInvalidCommand:
+		return "InvalidCommand"
+	case BeNoRequiredString:
+		return "NoRequiredString"
+	case BeNoRequiredInt:
+		return "NoRequiredInt"
+	case BeNoRequiredFloat:
+		return "NoRequiredFloat"
+	case BeNoRequiredDate:
+		return "NoRequiredDate"
+	case BeNoRequiredTime:
+		return "NoRequiredTime"
+	case BeNoRequiredDuration:
+		return "NoRequiredTime"
+	case BeNoRequiredPath:
+		return "NoRequiredPath"
+	case BeNoRequiredURL:
+		return "NoRequiredURL"
+	case BeNoRequiredIPv4:
+		return "NoRequiredIPv4"
+	case BeNotABool:
+		return "NotABool"
+	case BeNotAnInt:
+		return "NotABool"
+	case BeNotAFloat:
+		return "NotAFloat"
+	case BeNotADate:
+		return "NotADate"
+	case BeNotATime:
+		return "NotATime"
+	case BeNotADuration:
+		return "NotADuration"
+	case BeNotAnEmail:
+		return "NotAnEmail"
+	case BeNotAPhone:
+		return "NotAPhone"
+	case BeNotAPath:
+		return "NotAPath"
+	case BeNotAURL:
+		return "NotAURL"
+	case BeNotAnIPv4:
+		return "NotAIPv4"
+	}
+	return "Unknown error"
 }
 
-func newError(code parseErrCode, fmtstr string, args ...any) parseError {
-	return parseError{
-		code: code,
-		err:  fmt.Errorf(fmtstr, args...),
+func (e ParseError) Error() string {
+	return fmt.Sprintf("error code %s: %s", e.Code.String(), e.Err.Error())
+}
+
+func NewParseError(code ParseErrCode, fmtstr string, args ...any) ParseError {
+	return ParseError{
+		Code: code,
+		Err:  fmt.Errorf(fmtstr, args...),
 	}
 }
 
+func ErrorFromCode(code ParseErrCode, args ...any) ParseError {
+	return NewParseError(code, StringFromCode(code), args...)
+}
 
+func StringFromCode(code ParseErrCode) string {
+	switch code {
+	//errors from reading input script
+	case BeNoFileGiven:
+		return "expecting a file path for input script"
+	case BeWrongFileFormat:
+		return "input script is not formatted as a Boa input script"
+	case BeFileReadError:
+		return "cannot read input script %s"
+	case BeNoSectionText:
+		return "section %s has no content at line %d"
+	case BeUnsupportedType:
+		return "unsupported argument type at line %d"
+	case BeEofError:
+		return "reached end of input script"
+	case BeBadMetaLine:
+		return "line only contains meta characters"
+	case BeMetaNotStart:
+		return "meta character string is not at beginning of line"
+	case BeNoCommandName:
+		return "command or flag in input script cannot be  parsed"
+
+		// errors from parsing command/flag arguments
+
+	case BeNoExclusiveItem:
+		return "item %s is exclusive but was found with %s"
+	case BeNoRequiredItem:
+		return "Item %s is required but was not found"
+	case BeInvalidCommand:
+		return "command or flag passed on command line is not recognized"
+	case BeNoRequiredString:
+		return "argument for %s not found"
+	case BeNoRequiredInt:
+		return "integer argument for %s not found"
+	case BeNoRequiredFloat:
+		return "real number argument for %s not found"
+	case BeNoRequiredDate:
+		return "argument to %s, %s is not a valid date value such as '01-01-2022'"
+	case BeNoRequiredTime:
+		return "time argument for %s not found"
+	case BeNoRequiredDuration:
+		return "time duration argument for %s not found"
+	case BeNoRequiredPath:
+		return "file path argument for %s not found"
+	case BeNoRequiredURL:
+		return "URL argument for %s not found"
+	case BeNoRequiredEmail:
+		return "Email address argument for %s not found"
+	case BeNoRequiredPhone:
+		return "Phone number argument for %s not found"
+	case BeNoRequiredIPv4:
+		return "IP address argument for %s not found"
+	case BeNotABool:
+		return "%s, argument for %s, cannot be interpreted as a boolean"
+	case BeNotAnInt:
+		return "%s, argument for %s, cannot be interpreted as an integer"
+	case BeNotAFloat:
+		return "%s, argument for %s, cannot be interpreted as a real number"
+	case BeNotADate:
+		return "%s, argument for %s, cannot be interpreted as a date"
+	case BeNotATime:
+		return "argument to %s, %s is not a valid time value such as '3:45PM'"
+	case BeNotADuration:
+		return "argument to %s, %s is not a valid duration value such as '1h10m20s'"
+	case BeNotAnEmail:
+		return "%s, argument for %s, cannot be interpreted as an email address"
+	case BeNotAPhone:
+		return "%s, argument for %s, cannot be interpreted as a phone number"
+	case BeNotAPath:
+		return "%s, argument for %s, cannot be interpreted as a file path"
+	case BeNotAURL:
+		return "%s, argument for %s, cannot be interpreted as a URL"
+	case BeNotAnIPv4:
+		return "%s, argument for %s, cannot be interpreted as an IP address of IPv4 format"
+	}
+	return "Unknown error"
+}

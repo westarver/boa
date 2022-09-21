@@ -1,8 +1,8 @@
 package boa
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	eol               = -1
-	eof               = -1
 	Usagepat          = `^[Uu]{1}sage: `
 	CommandSectionPat = `^Commands[\t ]*:`
 	FlagSectionPat    = `^Flags[\t ]*:`
@@ -29,9 +27,10 @@ type helpParser struct {
 	moresectionpat    *regexp.Regexp
 	longsectionpat    *regexp.Regexp
 	itemMap           map[string]CmdLineItem
+	app               string
 	text              string
 	lines             []string
-	errs              []parseError
+	errs              []ParseError
 	pos               int
 	line              int
 	cmd               int
@@ -41,13 +40,13 @@ type helpParser struct {
 }
 
 func (h *helpParser) appendArg(a CmdLineItem) {
-	h.itemMap[a.name] = a
+	h.itemMap[a.Name] = a
 }
 
 func (h *helpParser) nextLine() string {
 	h.line++
 	if h.line >= len(h.lines) {
-		h.setError(newError(eof, "reached end of text"))
+		h.setError(NewParseError(BeEofError, StringFromCode(BeEofError)))
 		return ""
 	}
 
@@ -78,7 +77,7 @@ func (h *helpParser) setPos(n int) {
 	}
 }
 
-func (h *helpParser) setError(err parseError) {
+func (h *helpParser) setError(err ParseError) {
 	h.errs = append(h.errs, err)
 }
 
@@ -90,7 +89,7 @@ func (h *helpParser) Errors() string {
 	return strings.Join(errs, "\n")
 }
 
-func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
+func CollectItems(helpstring string) (map[string]CmdLineItem, string, string) {
 	lines, _ := script.Echo(helpstring).Slice()
 	parser := helpParser{
 		usagepat:          regexp.MustCompile(Usagepat),
@@ -99,9 +98,10 @@ func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
 		moresectionpat:    regexp.MustCompile(MoreSectionPat),
 		longsectionpat:    regexp.MustCompile(LongSectionPat),
 		itemMap:           map[string]CmdLineItem{},
+		app:               "",
 		text:              "",
 		lines:             lines,
-		errs:              []parseError{},
+		errs:              []ParseError{},
 		pos:               0,
 		line:              0,
 		cmd:               0,
@@ -110,7 +110,7 @@ func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
 		more:              0,
 	}
 
-	parser.cmd, parser.flg, parser.lng, parser.more = getLimits(&parser)
+	getLimits(&parser)
 	parser.text = parser.lines[0]
 	scanf := scanUsage(&parser)
 	for {
@@ -119,17 +119,21 @@ func CollectItems(helpstring string) (map[string]CmdLineItem, string) {
 		}
 		scanf = scanf(&parser)
 	}
-	return parser.itemMap, parser.Errors()
+
+	return parser.itemMap, parser.Errors(), parser.app
 }
 
 func FromHelp(helpstring string, args []string) *CLI {
-	items, errs := CollectItems(helpstring)
-	fmt.Fprintln(os.Stderr, errs)
+	items, errs, app := CollectItems(helpstring)
 	cli := ParseCommandLineArgs(items, args)
+	validateRequirements(items, cli)
+	cli.Application = app
+	cli.SetError(errors.New(errs))
 	cli.AllHelp = make(map[string]string)
 	for _, item := range items {
-		cli.AllHelp[item.name] = formatHelp(item.name, item.alias, item.shortHelp, item.longHelp)
+		cli.AllHelp[item.Name] = formatHelp(item.Name, item.Alias, item.ShortHelp, item.LongHelp)
 	}
+
 	return cli
 }
 
@@ -176,7 +180,7 @@ func formatHelp(name, alias, short, long string) string {
 
 //─────────────┤ getLimits ├─────────────
 
-func getLimits(h *helpParser) (int, int, int, int) {
+func getLimits(h *helpParser) {
 	var cmd = -1
 	var flg = -1
 	var lng = -1
@@ -199,7 +203,10 @@ func getLimits(h *helpParser) (int, int, int, int) {
 			more = i
 		}
 	}
-	return cmd, flg, lng, more
+	h.cmd = cmd
+	h.flg = flg
+	h.lng = lng
+	h.more = more
 }
 
 //─────────────┤ scanUsage ├─────────────
@@ -207,32 +214,63 @@ func getLimits(h *helpParser) (int, int, int, int) {
 func scanUsage(h *helpParser) scanfunc {
 	loc := h.usagepat.FindStringIndex(h.lines[0])
 	if loc == nil {
+		h.setError(NewParseError(BeWrongFileFormat, "First line in input script must be Usage: etc. followed by blank line. See example"))
 		return nil
 	}
 	if loc[0] > 0 {
+		h.setError(NewParseError(BeWrongFileFormat, "First line in input script must be Usage: etc. followed by blank line. See example"))
 		return nil
 	}
+	h.app = strings.Fields(h.lines[0])[1]
 	h.setPos(loc[1])
-	return scanCommand
+	if 2 >= len(h.lines) {
+		h.setError(NewParseError(BeWrongFileFormat, "First line in input script must be Usage: etc. followed by blank line. See example"))
+		return nil
+	}
+
+	return scanCommandAndFlag
 }
 
-//─────────────┤ scanCommand ├─────────────
+//regex patterns for scanning individual command/flag lines
 
-func scanCommand(h *helpParser) scanfunc {
+// `[*+#.!^%\\/@&]`
+var meta = regexp.MustCompile(`[*+#.!^%\\/@&]`)
 
-	if 2 >= len(h.lines) {
-		h.setError(newError(WrongFileFormat, "First line in help text must be Usage: etc. followed by blank line. See example"))
+//`[^*+#.!^%\\/@&]`
+var nonMeta = regexp.MustCompile(`[^*+#.!^%\\/@&]`)
+
+//`\[?[[:word:]\s\|-]+\]?`
+var nameAlias = regexp.MustCompile(`\[?[[:word:]\s\|-]+\]?`)
+
+//`\[?[0-9]*\]?`
+var paramPat = regexp.MustCompile(`\[?[0-9]*\]?`)
+
+//─────────────┤ scanCommandAndFlag ├─────────────
+
+func scanCommandAndFlag(h *helpParser) scanfunc {
+	if h.flg < h.cmd { // flags must come after commands
+		h.setError(ErrorFromCode(BeWrongFileFormat))
 		return nil
 	}
 
-	if h.cmd == -1 {
-		return scanFlag
+	if h.cmd == -1 && h.flg == -1 { // no commands or flags!
+		h.setError(ErrorFromCode(BeWrongFileFormat))
+		return nil
+	}
+
+	var inFlag bool
+	if h.cmd == -1 && h.flg != -1 { // no command section only flags
+		inFlag = true
+	}
+
+	var flagStart = len(h.lines) // default to eof
+
+	if h.flg > h.cmd {
+		flagStart = h.flg
 	}
 
 	var limit int
-	if h.flg != -1 && h.flg > h.cmd {
-		limit = h.flg
-	} else if h.lng != -1 && h.lng > h.cmd {
+	if h.lng != -1 && h.lng > h.cmd {
 		limit = h.lng
 	} else if h.more != -1 {
 		limit = h.more
@@ -241,244 +279,94 @@ func scanCommand(h *helpParser) scanfunc {
 	}
 
 	for i := h.cmd + 1; i < limit; i++ {
+		if i == flagStart {
+			continue
+		}
+		if i > flagStart {
+			inFlag = true
+		}
+
 		pos := 0
 		line := strings.Trim(h.lines[i], "\t ")
 		if len(line) == 0 {
 			continue
 		}
 
-		item := CmdLineItem{}
+		item := CmdLineItem{ParamType: TypeString} // default to string type
 
-		item.paramType = TypeString // initial type is string
+		if inFlag {
+			item.IsFlag = true
+		}
 
-		// scan for meta characters before command name, interpret
-		// * means exclusive, + means default, # means int, . means float
-		meta := "*+#."
-		if len(line) > pos+3 {
-			if !strings.ContainsAny(line[pos:pos+3], meta) {
-				item.exclusive = false
-				item.isDefault = false
-			} else {
-				if strings.Contains(line[pos:pos+3], "*") {
-					item.exclusive = true
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], "+") {
-					item.isDefault = true
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], "#") {
-					item.paramType = TypeInt
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], ".") {
-					item.paramType = TypeFloat
-					pos += 1
-				}
+		// if all goes well the paramType field will be populated
+		pos, err := scanMeta(line, &item)
+		if err != nil {
+			switch err.(ParseError).Code {
+			case BeBadMetaLine, BeMetaNotStart:
+				h.setError(err.(ParseError))
+				return nil
+			}
+		}
+		line = line[pos:]
+
+		// populate the name, alias fields
+		pos, err = scanName(line, &item)
+		if err != nil {
+			if err.(ParseError).Code == BeNoCommandName {
+				h.setError(err.(ParseError))
+				return nil
 			}
 		}
 
-		var cmd, remnant string
-		if strings.HasPrefix(line[pos:], "[") {
-			item.required = false
-			pos += 1
-			if n := strings.Index(line, "]"); n != -1 {
-				cmd = line[pos:n]
-				pos += n - 1
-				remnant = line[pos:]
-			}
-		} else {
-			if n := strings.Index(line, " "); n != -1 {
-				cmd = line[pos:n]
-				pos += n - 1
-				remnant = line[pos:]
-			} else {
-				cmd = line[pos:]
-			}
-			item.required = true
-		}
-		sl := strings.Split(cmd, " | ")
-		if len(sl) > 1 {
-			cmd = strings.Trim(sl[0], "\t ")
-			item.alias = strings.Trim(sl[1], "\t ")
+		var cmd = item.Name
+		line = line[pos:]
+
+		// populate the paramCount field
+		pos, err = scanParams(line, &item)
+		if err != nil {
+			h.setError(NewParseError(0, err.Error()+" at line %d", h.line))
+			return nil
 		}
 
-		r := regexp.MustCompile(`\[<[a-zA-Z0-9-_.]*>\]`)
-		loc := r.FindStringIndex(remnant)
-		if loc != nil {
-			item.paramOpt = true
-		}
+		line = line[pos:]
 
-		r = regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
-		loc = r.FindStringIndex(remnant)
-		if loc != nil {
-			if len(remnant) >= loc[1]+3 {
-				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
-					switch item.paramType {
-					case TypeString:
-						item.paramType = TypeStringSlice
-					case TypeInt:
-						item.paramType = TypeIntSlice
-					case TypeFloat:
-						item.paramType = TypeFloatSlice
-					default:
-						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
-					}
-					item.paramCount = -1
-				} else {
-					r = regexp.MustCompile(`\([0-9]\)*`)
-					loc = r.FindStringIndex(remnant)
-					if loc != nil {
-						num := remnant[loc[0]:loc[1]]
-						num = strings.TrimPrefix(strings.TrimSuffix(num, ")"), "(")
-						pnum, _ := strconv.ParseInt(num, 10, 32)
-						item.paramCount = int(pnum)
-					}
-				}
+		// correct the paramType field if not 1 or 0
+		if item.ParamCount != 0 && item.ParamCount != 1 {
+			switch item.ParamType {
+			case TypeString:
+				item.ParamType = TypeStringSlice
+			case TypeInt:
+				item.ParamType = TypeIntSlice
+			case TypeFloat:
+				item.ParamType = TypeFloatSlice
+			case TypeDate:
+				item.ParamType = TypeDateSlice
+			case TypeTime:
+				item.ParamType = TypeTimeSlice
+			case TypeTimeDuration:
+				item.ParamType = TypeTimeDurationSlice
+			case TypePath:
+				item.ParamType = TypePathSlice
+			case TypeURL:
+				item.ParamType = TypeURLSlice
+			case TypeEmail:
+				item.ParamType = TypeEmailSlice
+			case TypePhone:
+				item.ParamType = TypePhoneSlice
+			case TypeIPv4:
+				item.ParamType = TypeIPv4Slice
+			default:
+				h.setError(NewParseError(BeUnsupportedType, StringFromCode(BeUnsupportedType), h.line))
 			}
-		} else {
-			item.paramType = TypeBool
 		}
-		n := strings.Index(remnant, ":")
+		n := strings.Index(line, ":")
 		if n != -1 {
-			item.shortHelp = cmd + "\t-" + strings.Trim(remnant[n+1:], "\t \n")
+			item.ShortHelp = strings.Trim(line[n+1:], "\t \n")
 		}
 
 		if len(cmd) > 0 {
-			item.name = cmd
-			item.longHelp = scanLong(h, cmd)
-			item.id = i
-			h.appendArg(item)
-		}
-	}
-	return scanFlag
-}
-
-//─────────────┤ scanFlag ├─────────────
-
-func scanFlag(h *helpParser) scanfunc {
-
-	if h.flg == -1 {
-		return nil
-	}
-
-	var limit int
-	if h.lng != -1 && h.lng > h.flg {
-		limit = h.lng
-	} else if h.more != -1 {
-		limit = h.more
-	} else {
-		limit = len(h.lines)
-	}
-
-	for i := h.flg + 1; i < limit; i++ {
-		pos := 0
-		line := strings.Trim(h.lines[i], "\t ")
-		if len(line) == 0 {
-			continue
-		}
-
-		item := CmdLineItem{}
-		item.paramType = TypeString // initial type is string
-
-		// scan for meta characters before command name, interpret
-		// * means exclusive, + means default, # means int, . means float
-		meta := "*+#."
-		if len(line) > pos+3 {
-			if !strings.ContainsAny(line[pos:pos+3], meta) {
-				item.exclusive = false
-				item.isDefault = false
-			} else {
-				if strings.Contains(line[pos:pos+3], "*") {
-					item.exclusive = true
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], "+") {
-					item.isDefault = true
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], "#") {
-					item.paramType = TypeInt
-					pos += 1
-				}
-				if strings.Contains(line[pos:pos+3], ".") {
-					item.paramType = TypeFloat
-					pos += 1
-				}
-			}
-		}
-		var flag, remnant string
-		if strings.HasPrefix(line[pos:], "[") {
-			item.required = false
-			pos += 1
-			if n := strings.Index(line, "]"); n != -1 {
-				flag = line[pos:n]
-				pos += n - 1
-				remnant = line[pos:]
-			}
-		} else {
-			if n := strings.Index(line, " "); n != -1 {
-				flag = line[pos:n]
-				pos += n - 1
-				remnant = line[pos:]
-			} else {
-				flag = line[pos:]
-			}
-			item.required = true
-		}
-
-		sl := strings.Split(flag, " | ")
-		if len(sl) > 1 {
-			flag = strings.Trim(sl[0], "\t ")
-			item.alias = strings.Trim(sl[1], "\t ")
-		}
-
-		r := regexp.MustCompile(`\[<[a-zA-Z0-9-_.]*>\]`)
-		loc := r.FindStringIndex(remnant)
-		if loc != nil {
-			item.paramOpt = true
-		}
-
-		r = regexp.MustCompile(`<[a-zA-Z0-9-_.]*>`)
-		loc = r.FindStringIndex(remnant)
-		if loc != nil {
-			if len(remnant) >= loc[1]+3 {
-				if strings.Contains(remnant[loc[1]:loc[1]+3], "...") {
-					switch item.paramType {
-					case TypeString:
-						item.paramType = TypeStringSlice
-					case TypeInt:
-						item.paramType = TypeIntSlice
-					case TypeFloat:
-						item.paramType = TypeFloatSlice
-					default:
-						h.setError(newError(UnsupportedType, "unsupported type at line %d", h.line))
-					}
-					item.paramCount = -1
-				} else {
-					r = regexp.MustCompile(`\([0-9]\)*`)
-					loc = r.FindStringIndex(remnant)
-					if loc != nil {
-						num := remnant[loc[0]:loc[1]]
-						num = strings.TrimPrefix(strings.TrimSuffix(num, ")"), "(")
-						pnum, _ := strconv.ParseInt(num, 10, 32)
-						item.paramCount = int(pnum)
-					}
-				}
-			}
-		} else {
-			item.paramType = TypeBool //no args to flag means its true if present
-		}
-		n := strings.Index(remnant, ":")
-		if n != -1 {
-			item.shortHelp = flag + "\t-" + strings.Trim(remnant[n+1:], "\t \n")
-		}
-
-		item.isFlag = true
-		if len(flag) > 0 {
-			item.name = flag
-			item.longHelp = scanLong(h, flag)
-			item.id = i
+			item.LongHelp = scanLong(h, cmd)
+			item.Id = i
 			h.appendArg(item)
 		}
 	}
@@ -504,32 +392,32 @@ func scanLong(h *helpParser, name string) string {
 		limit = len(h.lines)
 	}
 	var long []string
-	start, end := getLimitsForName(h.lines[h.lng+1:limit], name, h.lng)
+	start, end := getLimitsForName(h.lines[:limit], name, h.lng)
 	if start == -1 {
 		return ""
-	}
-	if start == h.lng { //dirty hack to fix off-by-one error
-		start++
 	}
 
 	long = h.lines[start:end]
 	for i := range long {
 		long[i] = strings.TrimPrefix(long[i], name)
 		long[i] = strings.Trim(long[i], "\t ")
+		long[i] = strings.Trim(long[i], ":")
+		long[i] = strings.Trim(long[i], "\t ")
 	}
 	return strings.Join(long, "\n")
 }
 
 func getLimitsForName(lines []string, name string, i int) (int, int) {
-	r := regexp.MustCompile(`^[[:print:]]+[[:blank:]]*:[[:blank:]]+`)
+	r := regexp.MustCompile(`^` + name + `[[:blank:]]*:`)
 	var start, end int
 	var found bool
-	for j, ln := range lines {
-		loc := r.FindStringIndex(ln)
+	for j := i + 1; j < len(lines); j++ {
+		loc := r.FindStringIndex(lines[j])
 		if loc != nil {
-			str := ln[loc[0]:loc[1]]
+			str := lines[j][loc[0]:loc[1]]
 			str = strings.Trim(str, "\t ")
 			str = strings.TrimSuffix(str, ":")
+			str = strings.Trim(str, "\t ")
 			if str == name {
 				start = j
 				found = true
@@ -537,22 +425,165 @@ func getLimitsForName(lines []string, name string, i int) (int, int) {
 			}
 		}
 	}
+	if !found {
+		return -1, -1
+	}
+
 	if start < len(lines)-1 {
-		lines = lines[start+1:]
 		var j int
-		for _, ln := range lines {
-			j++
-			loc := r.FindStringIndex(ln)
-			if loc != nil {
+		for i := start; i < len(lines); i++ {
+			if strings.Trim(lines[i], "\t ") == "" {
 				break
 			}
+			j++
 		}
-		end = start + j + 1
+		end = start + j
 	} else {
 		end = start
 	}
 	if start == 0 && !found {
 		return -1, -1
 	}
-	return start + i, end + i
+	return start, end
+}
+
+// scan for meta characters before command/flag name, interpret.
+// * means exclusive, + means default, # means int, . means float
+// ! means date, % means time, ^ is duration, \ means url, / is path,
+// @ is email, & is IPv4
+func scanMeta(line string, item *CmdLineItem) (int, error) {
+
+	// 1st non-meta char terminates the meta string. Any following
+	// meta chars are parsed as part of the normal command/flag
+	// description and will fail as only word characters are permitted
+	notmeta := nonMeta.FindStringIndex(line)
+	if notmeta == nil {
+		return len(line), NewParseError(BeBadMetaLine, StringFromCode(BeBadMetaLine))
+	}
+
+	metastr := line[:notmeta[0]]
+	if len(metastr) == 0 {
+		item.Exclusive = false
+		item.IsDefault = false
+		return 0, nil
+	}
+
+	loc := meta.FindStringIndex(metastr)
+	if loc == nil {
+		item.Exclusive = false
+		item.IsDefault = false
+		return 0, nil
+	}
+
+	if loc[0] != 0 {
+		return 0, NewParseError(BeMetaNotStart, StringFromCode(BeMetaNotStart))
+	}
+
+	var metarunes []rune
+	for i := 0; i < len(metastr); i++ {
+		metarunes = append(metarunes, rune(metastr[i]))
+	}
+
+	for i := 0; i < len(metarunes); i++ {
+		switch metarunes[i] {
+		case '*':
+			item.Exclusive = true
+		case '+':
+			item.IsDefault = true
+		case '#':
+			item.ParamType = TypeInt
+		case '.':
+			item.ParamType = TypeFloat
+		case '!':
+			item.ParamType = TypeDate
+		case '%':
+			item.ParamType = TypeTime
+		case '^':
+			item.ParamType = TypeTimeDuration
+		case '/':
+			item.ParamType = TypePath
+		case '\\':
+			item.ParamType = TypeURL
+		case '@':
+			item.ParamType = TypeEmail
+		case '&':
+			item.ParamType = TypeIPv4
+		}
+	}
+
+	return len(metarunes), nil
+}
+
+func scanName(line string, item *CmdLineItem) (int, error) {
+	nameloc := nameAlias.FindStringIndex(line)
+	if nameloc == nil {
+		return 0, ErrorFromCode(BeNoCommandName)
+	}
+	namestr := line[nameloc[0]:nameloc[1]]
+	if !strings.HasPrefix(namestr, "[") {
+		item.Required = true
+	} else {
+		namestr = strings.TrimSuffix(strings.TrimPrefix(namestr, "["), "]")
+	}
+
+	al := strings.Split(namestr, "|")
+	item.Name = strings.TrimSpace(al[0])
+
+	if len(al) > 1 {
+		item.Alias = strings.TrimSpace(al[1])
+	}
+
+	return nameloc[1], nil
+}
+
+func scanParams(line string, item *CmdLineItem) (int, error) {
+	colonpos := strings.Index(line, ":")
+	if colonpos == -1 {
+		item.ParamCount = 0
+		return 0, fmt.Errorf("no colon followed by short description found after %s", item.Name)
+	}
+
+	line = line[:colonpos]
+	line = strings.TrimSpace(line)
+
+	if line == "" {
+		item.ParamCount = 0
+		item.ParamType = TypeBool // if no params the command is true if found on command line
+		return colonpos - 1, nil
+	}
+
+	if line == "..." {
+		item.ParamCount = -1
+		return colonpos - 1, nil
+	}
+
+	parloc := paramPat.FindStringIndex(line)
+
+	if parloc == nil {
+		item.ParamCount = 0
+		cf := "command"
+		if item.IsFlag {
+			cf = "flag"
+		}
+		return colonpos - 1, fmt.Errorf("unrecognized %s, %s found after %s", cf, line, item.Name)
+	}
+
+	parstr := line[parloc[0]:parloc[1]]
+	parstr = strings.TrimSpace(parstr)
+	if strings.HasPrefix(parstr, "[") {
+		parstr = strings.TrimSuffix(strings.TrimPrefix(parstr, "["), "]")
+		item.ParamOpt = true
+	}
+	if parstr == "" {
+		item.ParamCount = 0
+		return colonpos - 1, nil
+	}
+
+	ct, err := strconv.ParseInt(parstr, 10, 64)
+	if err != nil {
+		return colonpos - 1, err
+	}
+
+	item.ParamCount = int(ct)
+	return colonpos - 1, nil
 }

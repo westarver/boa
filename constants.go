@@ -1,9 +1,9 @@
 package boa
 
-type ParamType int
+type ParameterType int
 
 const (
-	TypeBool ParamType = iota
+	TypeBool ParameterType = iota
 	TypeString
 	TypeStringSlice
 	TypeInt
@@ -11,7 +11,19 @@ const (
 	TypeFloat
 	TypeFloatSlice
 	TypeTime
+	TypeTimeSlice
 	TypeTimeDuration
+	TypeTimeDurationSlice
 	TypeDate
-	TypeDateRange
+	TypeDateSlice
+	TypePath
+	TypePathSlice
+	TypeURL
+	TypeURLSlice
+	TypeIPv4
+	TypeIPv4Slice
+	TypeEmail
+	TypeEmailSlice
+	TypePhone
+	TypePhoneSlice
 )
