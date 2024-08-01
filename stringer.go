@@ -17,7 +17,7 @@ func TypeToString(p ParameterType) string {
 	case TypeTimeDuration, TypeTimeDurationSlice:
 		return "Time Duration"
 	case TypePath, TypePathSlice:
-		return "Path"
+		return "File Path"
 	case TypeURL, TypeURLSlice:
 		return "URL"
 	case TypeEmail, TypeEmailSlice:
