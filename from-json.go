@@ -2,6 +2,7 @@ package boa
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 func AppDataName() string {
@@ -54,4 +55,43 @@ func CollectItemsFromJSON(jsonBytes []byte) (map[string]CmdLineItem, error) {
 		jmap[v.Name] = v
 	}
 	return jmap, nil
+}
+
+func formatHelp(name, alias, short, long string) string {
+	name = strings.Trim(name, " \t")
+	s := strings.Trim(short, "\t\n ")
+	s = strings.TrimPrefix(s, name)
+	s = strings.TrimPrefix(s, ":")
+	s = strings.Trim(s, "\t\n ") + "\n"
+	var comb string
+	if len(alias) > 0 {
+		comb = name + " | " + alias
+	} else {
+		comb = name
+	}
+
+	var spc int
+	if len(comb) > 12 {
+		spc = 4
+	} else {
+		spc = 16 - len(comb)
+	}
+
+	s = comb + strings.Repeat(" ", spc) + s
+	if len(long) == 0 {
+		return s
+	}
+
+	lng := strings.Split(long, "\n")
+	var ret []string
+	for _, l := range lng {
+		l = strings.Trim(l, "\t ")
+		l = strings.TrimPrefix(l, name)
+		l = strings.TrimPrefix(l, ":")
+		l = strings.Trim(l, "\t ")
+
+		ret = append(ret, l)
+	}
+	long = strings.Join(ret, "\n")
+	return s + long
 }
